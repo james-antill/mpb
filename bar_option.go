@@ -1,6 +1,6 @@
 package mpb
 
-import "github.com/vbauerster/mpb/decor"
+import "github.com/james-antill/mpb/decor"
 
 // BarOption is a function option which changes the default behavior of a bar,
 // if passed to p.AddBar(int64, ...BarOption)
@@ -58,8 +58,8 @@ func barWidth(w int) BarOption {
 	}
 }
 
-func barFormat(format string) BarOption {
+func barFormat(format string, fillFmt []string) BarOption {
 	return func(bs *state) {
-		bs.updateFormat(format)
+		bs.updateFormat(format, fillFmt)
 	}
 }
