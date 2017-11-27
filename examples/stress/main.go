@@ -6,14 +6,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vbauerster/mpb"
-	"github.com/vbauerster/mpb/decor"
+	"github.com/james-antill/mpb"
+	"github.com/james-antill/mpb/decor"
 )
 
 const (
-	totalBars    = 32
+	totalBars    = 128
+	liveBars     = 32
 	maxBlockSize = 8
 )
+
+type BarData struct {
+	name  string
+	total int
+}
 
 func main() {
 
@@ -21,28 +27,46 @@ func main() {
 	p := mpb.New(mpb.WithWaitGroup(&wg))
 	wg.Add(totalBars)
 
+	wchan := make(chan struct{}, liveBars)
+	go func() { wg.Wait(); close(wchan) }()
+	for i := 0; i < liveBars; i++ {
+		wchan <- struct{}{}
+	}
+
+	bars := make([]BarData, totalBars)
+	totalData := 0
 	for i := 0; i < totalBars; i++ {
-		name := fmt.Sprintf("Bar#%02d: ", i)
-		total := rand.Intn(120) + 10
-		bar := p.AddBar(int64(total),
-			mpb.PrependDecorators(
-				decor.StaticName(name, len(name), 0),
-				decor.ETA(4, decor.DSyncSpace),
-			),
-			mpb.AppendDecorators(
-				decor.Percentage(5, 0),
-			),
-		)
+		bars[i].name = fmt.Sprintf("Bar#%02d: ", i)
+		bars[i].total = rand.Intn(10+i*3) + 10
+		totalData += bars[i].total
+	}
+
+	tbbar := p.AddBarDef(int64(totalBars), "Bars: ", decor.Unit_k, mpb.BarID(2))
+	tdbar := p.AddBarDef(int64(totalData), "Data: ", decor.Unit_k, mpb.BarID(3))
+
+	for i := 0; i < totalBars; i++ {
+		name := bars[i].name
+		total := bars[i].total
+
+		bar := p.AddBarDef(int64(total), name, decor.Unit_k)
 
 		go func() {
 			defer wg.Done()
+			defer tbbar.Increment()
+			defer func() { wchan <- struct{}{} }()
+
 			blockSize := rand.Intn(maxBlockSize) + 1
 			for i := 0; i < total; i++ {
 				sleep(blockSize)
-				bar.Incr(1)
+				bar.Increment()
+				tdbar.Increment()
 				blockSize = rand.Intn(maxBlockSize) + 1
 			}
 		}()
+		<-wchan
+	}
+	for range wchan {
+		continue
 	}
 
 	p.Stop()

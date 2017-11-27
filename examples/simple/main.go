@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vbauerster/mpb"
-	"github.com/vbauerster/mpb/decor"
+	"github.com/james-antill/mpb"
+	"github.com/james-antill/mpb/decor"
 )
 
 func main() {

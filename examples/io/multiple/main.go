@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/vbauerster/mpb"
-	"github.com/vbauerster/mpb/decor"
+	"github.com/james-antill/mpb"
+	"github.com/james-antill/mpb/decor"
 )
 
 func main() {
@@ -59,13 +59,7 @@ func download(wg *sync.WaitGroup, p *mpb.Progress, name, url string) {
 	}
 
 	// create bar with appropriate decorators
-	bar := p.AddBar(size,
-		mpb.PrependDecorators(
-			decor.StaticName(name, 0, 0),
-			decor.Counters("%3s / %3s", decor.Unit_KiB, 18, 0),
-		),
-		mpb.AppendDecorators(decor.ETA(5, decor.DwidthSync)),
-	)
+	bar := p.AddBarDef(size, name, decor.Unit_KiB)
 
 	// create proxy reader
 	reader := bar.ProxyReader(resp.Body)
