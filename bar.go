@@ -7,7 +7,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/vbauerster/mpb/decor"
+	"github.com/james-antill/mpb/decor"
+	"github.com/mattn/go-runewidth"
 )
 
 const (
@@ -24,7 +25,8 @@ const (
 )
 
 type fmtRunes [formatLen]rune
-type fmtByteSegments [formatLen][]byte
+type fmtByteSegments [][]byte
+type fmtFillSegments []rune
 
 // Bar represents a progress Bar
 type Bar struct {
@@ -47,11 +49,13 @@ type (
 		id             int
 		width          int
 		format         fmtRunes
+		fmtFill        []rune
 		etaAlpha       float64
 		total          int64
 		current        int64
 		trimLeftSpace  bool
 		trimRightSpace bool
+		started        bool
 		completed      bool
 		aborted        bool
 		startTime      time.Time
@@ -86,6 +90,7 @@ func newBar(total int64, wg *sync.WaitGroup, cancel <-chan struct{}, options ...
 	}
 
 	go b.server(s, wg, cancel)
+
 	return b
 }
 
@@ -305,11 +310,21 @@ func (b *Bar) render(tw int, flushed chan struct{}, prependWs, appendWs *widthSy
 	return ch
 }
 
-func (s *state) updateFormat(format string) {
+func (s *state) updateFormat(format string, fillFmt []string) {
 	for i, n := 0, 0; len(format) > 0; i++ {
 		s.format[i], n = utf8.DecodeRuneInString(format)
 		format = format[n:]
 	}
+
+	if len(fillFmt) < 1 {
+		return
+	}
+
+	s.fmtFill = make([]rune, len(fillFmt))
+	for i, f := range fillFmt {
+		s.fmtFill[i], _ = utf8.DecodeRuneInString(f)
+	}
+	s.format[rFill] = s.fmtFill[len(s.fmtFill)-1]
 }
 
 func (s *state) updateTimePerItemEstimate(amount int) {
@@ -359,19 +374,22 @@ func draw(s *state, termWidth int, prependWs, appendWs *widthSync) []byte {
 
 	var barBlock []byte
 	buf := make([]byte, 0, termWidth)
-	segments := fmtRunesToByteSegments(s.format)
+	segments := fmtRunesToByteSegments(s.format[:])
+	fmtFill := fmtRunesToByteSegments(s.fmtFill)
 
 	if s.simpleSpinner != nil {
 		for _, block := range [...][]byte{segments[rLeft], {s.simpleSpinner()}, segments[rRight]} {
 			barBlock = append(barBlock, block...)
 		}
 	} else {
-		barBlock = fillBar(s.total, s.current, s.width, segments, s.refill)
-		barCount := utf8.RuneCount(barBlock)
+		barBlock = fillBar(s.total, s.current, s.width, segments,
+			fmtFill, s.refill)
+		barCount := runewidth.StringWidth(string(barBlock))
 		totalCount := prependCount + barCount + appendCount
 		if totalCount > termWidth {
 			shrinkWidth := termWidth - prependCount - appendCount
-			barBlock = fillBar(s.total, s.current, shrinkWidth, segments, s.refill)
+			barBlock = fillBar(s.total, s.current, shrinkWidth, segments,
+				fmtFill, s.refill)
 		}
 	}
 
@@ -385,7 +403,8 @@ func concatenateBlocks(buf []byte, blocks ...[]byte) []byte {
 	return buf
 }
 
-func fillBar(total, current int64, width int, fmtBytes fmtByteSegments, rf *refill) []byte {
+func fillBar(total, current int64, width int,
+	fmtBytes, fmtFill fmtByteSegments, rf *refill) []byte {
 	if width < 2 || total <= 0 {
 		return []byte{}
 	}
@@ -443,8 +462,8 @@ func newStatistics(s *state) *decor.Statistics {
 	}
 }
 
-func fmtRunesToByteSegments(format fmtRunes) fmtByteSegments {
-	var segments fmtByteSegments
+func fmtRunesToByteSegments(format []rune) fmtByteSegments {
+	segments := make(fmtByteSegments, len(format))
 	for i, r := range format {
 		buf := make([]byte, utf8.RuneLen(r))
 		utf8.EncodeRune(buf, r)
