@@ -1,5 +1,12 @@
 # Multi Progress Bar
 
+This is a fork from github.com/vbauerster/mpb. There are a few differences, but
+they are mostly cosmetic. The major points of design are:
+
+  * Simple: It should be very easy to create a progressbar.
+  * Informative: The progressbar should provide the main point of data well (when will X finish).
+  * Pretty: The progressbar should look pretty.
+
 [![GoDoc](https://godoc.org/github.com/james-antill/mpb?status.svg)](https://godoc.org/github.com/james-antill/mpb)
 [![Build Status](https://travis-ci.org/james-antill/mpb.svg?branch=master)](https://travis-ci.org/james-antill/mpb)
 [![Go Report Card](https://goreportcard.com/badge/github.com/james-antill/mpb)](https://goreportcard.com/report/github.com/james-antill/mpb)
