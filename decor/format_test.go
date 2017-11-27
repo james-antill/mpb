@@ -3,7 +3,7 @@ package decor_test
 import (
 	"testing"
 
-	"github.com/vbauerster/mpb/decor"
+	"github.com/james-antill/mpb/decor"
 )
 
 func TestFormatNoUnits(t *testing.T) {

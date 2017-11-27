@@ -1,9 +1,9 @@
 # Multi Progress Bar
 
-[![GoDoc](https://godoc.org/github.com/vbauerster/mpb?status.svg)](https://godoc.org/github.com/vbauerster/mpb)
-[![Build Status](https://travis-ci.org/vbauerster/mpb.svg?branch=master)](https://travis-ci.org/vbauerster/mpb)
-[![Go Report Card](https://goreportcard.com/badge/github.com/vbauerster/mpb)](https://goreportcard.com/report/github.com/vbauerster/mpb)
-[![codecov](https://codecov.io/gh/vbauerster/mpb/branch/master/graph/badge.svg)](https://codecov.io/gh/vbauerster/mpb)
+[![GoDoc](https://godoc.org/github.com/james-antill/mpb?status.svg)](https://godoc.org/github.com/james-antill/mpb)
+[![Build Status](https://travis-ci.org/james-antill/mpb.svg?branch=master)](https://travis-ci.org/james-antill/mpb)
+[![Go Report Card](https://goreportcard.com/badge/github.com/james-antill/mpb)](https://goreportcard.com/report/github.com/james-antill/mpb)
+[![codecov](https://codecov.io/gh/james-antill/mpb/branch/master/graph/badge.svg)](https://codecov.io/gh/james-antill/mpb)
 
 **mpb** is a Go lib for rendering progress bars in terminal applications.
 
@@ -24,7 +24,7 @@
 To get the package, execute:
 
 ```sh
-go get gopkg.in/vbauerster/mpb.v3
+go get github.com/james-antill/mpb
 ```
 
 ## Usage

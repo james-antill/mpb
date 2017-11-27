@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vbauerster/mpb"
-	"github.com/vbauerster/mpb/decor"
+	"github.com/james-antill/mpb"
+	"github.com/james-antill/mpb/decor"
 )
 
 func TestWithContext(t *testing.T) {

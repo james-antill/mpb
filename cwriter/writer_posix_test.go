@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/vbauerster/mpb/cwriter"
+	"github.com/james-antill/mpb/cwriter"
 )
 
 var clearSequence = fmt.Sprintf("%c[%dA%c[2K\r", 27, 1, 27)
