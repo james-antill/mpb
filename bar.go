@@ -126,27 +126,37 @@ func (b *Bar) Increment() {
 	b.Incr(1)
 }
 
+// Update updates the startTime/timeElapsed for ETA/Nsec
+func (b *Bar) Update() {
+	b.Incr(0)
+}
+
 // Incr increments progress bar
 func (b *Bar) Incr(n int) {
-	if n < 1 {
+	if n < 0 {
 		return
 	}
 	select {
 	case b.ops <- func(s *state) {
-		if s.current == 0 {
+		if s.current == 0 && !s.started {
 			s.startTime = time.Now()
 			s.blockStartTime = s.startTime
+			s.started = true
 		}
 		sum := s.current + int64(n)
 		s.timeElapsed = time.Since(s.startTime)
-		s.updateTimePerItemEstimate(n)
+		if n > 0 {
+			s.updateTimePerItemEstimate(n)
+		}
 		if s.total > 0 && sum >= s.total {
 			s.current = s.total
 			s.completed = true
 			return
 		}
 		s.current = sum
-		s.blockStartTime = time.Now()
+		if n > 0 {
+			s.blockStartTime = time.Now()
+		}
 	}:
 	case <-b.quit:
 		return
@@ -412,13 +422,24 @@ func fillBar(total, current int64, width int,
 	// bar width without leftEnd and rightEnd runes
 	barWidth := width - 2
 
-	completedWidth := decor.CalcPercentage(total, current, barWidth)
-
 	buf := make([]byte, 0, width)
+
+	// When we get to 100% don't leave bar droppings
+	if current >= total {
+		barWidth += 2
+		for i := 0; i < barWidth; i++ {
+			buf = append(buf, fmtBytes[rEmpty]...)
+		}
+		return buf
+	}
+
+	flen := len(fmtFill)
+	completedWidth, foff := decor.CalcPercentage(total, current, barWidth, flen)
+
 	buf = append(buf, fmtBytes[rLeft]...)
 
 	if rf != nil {
-		till := decor.CalcPercentage(total, rf.till, barWidth)
+		till, _ := decor.CalcPercentage(total, rf.till, barWidth, 0)
 		rbytes := make([]byte, utf8.RuneLen(rf.char))
 		utf8.EncodeRune(rbytes, rf.char)
 		// append refill rune
@@ -434,7 +455,12 @@ func fillBar(total, current int64, width int,
 		}
 	}
 
-	if completedWidth < barWidth && completedWidth > 0 {
+	if flen >= 1 {
+		if foff >= 1 {
+			buf = append(buf, fmtFill[foff-1]...)
+			completedWidth++
+		}
+	} else if completedWidth < barWidth && completedWidth > 0 {
 		_, size := utf8.DecodeLastRune(buf)
 		buf = buf[:len(buf)-size]
 		buf = append(buf, fmtBytes[rTip]...)
