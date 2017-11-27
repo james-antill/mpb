@@ -3,10 +3,13 @@ package mpb
 import (
 	"io"
 	"os"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/vbauerster/mpb/cwriter"
+	"github.com/james-antill/mpb/cwriter"
+	"github.com/james-antill/mpb/decor"
 )
 
 type (
@@ -24,6 +27,7 @@ type (
 
 		width        int
 		format       string
+		fmtFill      []string
 		rr           time.Duration
 		ewg          *sync.WaitGroup
 		cw           *cwriter.Writer
@@ -42,7 +46,23 @@ const (
 	// default width
 	pwidth = 80
 	// default format
-	pformat = "[=>-]"
+	pformat = "[=> ]"
+	// Do we want to try to use the utf8 progressbar
+	utf8Fill = true
+)
+
+var (
+	pmultiFillASCII = [2]string{"-", "="}
+	// http://www.fileformat.info/info/unicode/block/block_elements/utf8test.htm
+	pmultiFillUTF8 = [8]string{
+		"\xe2\x96\x8f",
+		"\xe2\x96\x8e",
+		"\xe2\x96\x8d",
+		"\xe2\x96\x8c",
+		"\xe2\x96\x8b",
+		"\xe2\x96\x8a",
+		"\xe2\x96\x89",
+		"\xe2\x96\x88"}
 )
 
 // Progress represents the container that renders Progress bars
@@ -59,17 +79,44 @@ type Progress struct {
 	ops  chan func(*pConf)
 }
 
+// Default sort the completed bars away, up the screen,
+// also sort priority/ID higher as lower down the screen.
+func defaultSort(bs []*Bar) {
+	sort.SliceStable(bs, func(i, j int) bool {
+		if bs[i].ID() != bs[j].ID() {
+			return bs[i].ID() < bs[j].ID()
+		}
+
+		// Move the finished bars to the top...
+		if bs[i].Total() != bs[i].Current() {
+			return false
+		}
+		if bs[j].Total() == bs[j].Current() {
+			return false
+		}
+		return true
+	})
+}
+
 // New creates new Progress instance, which orchestrates bars rendering process.
 // Accepts mpb.ProgressOption funcs for customization.
 func New(options ...ProgressOption) *Progress {
+	// This is ugly, but it's what python does for stdout.encoding.
+	var fill = pmultiFillASCII[:]
+	if utf8Fill && strings.HasSuffix(strings.ToLower(os.Getenv("LANG")), ".utf-8") {
+		fill = pmultiFillUTF8[:]
+	}
+
 	// defaults
 	conf := pConf{
-		bars:   make([]*Bar, 0, 3),
-		width:  pwidth,
-		format: pformat,
-		cw:     cwriter.New(os.Stdout),
-		rr:     prr,
-		ticker: time.NewTicker(prr),
+		bars:         make([]*Bar, 0, 3),
+		beforeRender: defaultSort,
+		width:        pwidth,
+		format:       pformat,
+		fmtFill:      fill,
+		cw:           cwriter.New(os.Stdout),
+		rr:           prr,
+		ticker:       time.NewTicker(prr),
 	}
 
 	for _, opt := range options {
@@ -91,7 +138,8 @@ func New(options ...ProgressOption) *Progress {
 func (p *Progress) AddBar(total int64, options ...BarOption) *Bar {
 	result := make(chan *Bar, 1)
 	op := func(c *pConf) {
-		options = append(options, barWidth(c.width), barFormat(c.format))
+		options = append(options, barWidth(c.width))
+		options = append(options, barFormat(c.format, c.fmtFill))
 		b := newBar(total, p.wg, c.cancel, options...)
 		c.bars = append(c.bars, b)
 		p.wg.Add(1)
@@ -103,6 +151,18 @@ func (p *Progress) AddBar(total int64, options ...BarOption) *Bar {
 	case <-p.quit:
 		return new(Bar)
 	}
+}
+
+// AddBarDef creates a new progress bar with sane default options.
+func (p *Progress) AddBarDef(total int64, name string, unit decor.Units,
+	options ...BarOption) *Bar {
+	var opts []BarOption
+	opts = append(opts, PrependDecorators(
+		decor.StaticName(name, 0, 0),
+		decor.DefDataPreBar(unit)))
+	opts = append(opts, AppendDecorators(decor.ETA(4, decor.DwidthSync)))
+	opts = append(opts, options...)
+	return p.AddBar(total, opts...)
 }
 
 // RemoveBar removes bar at any time.
