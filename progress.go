@@ -266,19 +266,36 @@ func (p *Progress) server(conf pConf) {
 				close(wSyncTimeout)
 			})
 
-			b0 := conf.bars[0]
+			tw, th, _ := cwriter.GetTermSize()
+			// Default terminal is 80x24.
+			if th < 4 { // Need 1 line of context and one blank at the bottom
+				th = 24
+			}
+			if tw < 20 { // FIXME: Should count/size prependers
+				tw = 80
+			}
+
+			// We want the last N bars, if we have too many it screws up
+			// the terminal display (and is unreadable anyway)...
+			bars := conf.bars[:]
+			skip := 0
+			th -= 3
+			if numBars > th {
+				skip = numBars - th
+			}
+
+			b0 := bars[0]
 			prependWs := newWidthSync(wSyncTimeout, numBars, b0.NumOfPrependers())
 			appendWs := newWidthSync(wSyncTimeout, numBars, b0.NumOfAppenders())
 
-			tw, _, _ := cwriter.GetTermSize()
-
 			flushed := make(chan struct{})
 			sequence := make([]<-chan []byte, numBars)
-			for i, b := range conf.bars {
+			for i, b := range bars {
+				b.Update()
 				sequence[i] = b.render(tw, flushed, prependWs, appendWs)
 			}
 
-			for buf := range fanIn(sequence...) {
+			for buf := range fanIn(skip, sequence...) {
 				conf.cw.Write(buf)
 			}
 
@@ -337,13 +354,18 @@ func newWidthSync(timeout <-chan struct{}, numBars, numColumn int) *widthSync {
 	return ws
 }
 
-func fanIn(inputs ...<-chan []byte) <-chan []byte {
+func fanIn(skip int, inputs ...<-chan []byte) <-chan []byte {
 	ch := make(chan []byte)
 
 	go func() {
 		defer close(ch)
 		for _, input := range inputs {
-			ch <- <-input
+			data := <-input
+			if skip > 1 {
+				skip--
+				continue
+			}
+			ch <- data
 		}
 	}()
 
