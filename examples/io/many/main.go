@@ -213,7 +213,7 @@ func download(wg *sync.WaitGroup, p *mpb.Progress, url *imgurData) {
 	}
 
 	// create bar with appropriate decorators
-	bar := p.AddBarDef(size, name, decor.Unit_KiB)
+	bar := p.AddBarDef(size, name, decor.Unit_KB)
 
 	// create proxy reader
 	reader := bar.ProxyReader(resp.Body)
