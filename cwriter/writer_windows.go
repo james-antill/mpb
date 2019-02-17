@@ -82,7 +82,7 @@ func (w *Writer) clearLines() {
 // the code is stolen from "golang.org/x/crypto/ssh/terminal"
 func GetTermSize() (width, height int, err error) {
 	var info consoleScreenBufferInfo
-	_, _, e := syscall.Syscall(procGetConsoleScreenBufferInfo.Addr(), 2, uintptr(syscall.Stdout), uintptr(unsafe.Pointer(&info)), 0)
+	_, _, e := syscall.Syscall(procGetConsoleScreenBufferInfo.Addr(), 2, uintptr(syscall.Stderr), uintptr(unsafe.Pointer(&info)), 0)
 	if e != 0 {
 		return 0, 0, error(e)
 	}

@@ -114,7 +114,7 @@ func New(options ...ProgressOption) *Progress {
 		width:        pwidth,
 		format:       pformat,
 		fmtFill:      fill,
-		cw:           cwriter.New(os.Stdout),
+		cw:           cwriter.New(os.Stderr),
 		rr:           prr,
 		ticker:       time.NewTicker(prr),
 	}
