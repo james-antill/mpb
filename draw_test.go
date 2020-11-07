@@ -107,6 +107,6 @@ func newTestState() *state {
 		trimLeftSpace:  true,
 		trimRightSpace: true,
 	}
-    s.updateFormat("[=>-]", []string{"="})
+	s.updateFormat("[=>-]", []string{"="})
 	return s
 }

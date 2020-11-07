@@ -184,8 +184,14 @@ func ETAString(s *Statistics) string {
 	secs := int(dur.Seconds()) % 60
 	if s.Current == 0 {
 		str = "∞:??"
-	} else if dur.Minutes() > 999 {
-		str = fmt.Sprintf("∞:%02d", secs)
+	} else if dur.Hours() > 99*24 {
+		str = "∞"
+	} else if dur.Hours() > 99 {
+        d := dur.Round(time.Hour * 24).Hours() / 24
+		str = fmt.Sprintf("~%dd", int(d))
+	} else if dur.Minutes() > 99 {
+        h := dur.Round(time.Hour).Hours()
+		str = fmt.Sprintf("~%dh", int(h))
 	} else {
 		str = fmt.Sprintf("%d:%02d", int(dur.Minutes()), secs)
 	}
