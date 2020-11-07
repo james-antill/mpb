@@ -160,9 +160,9 @@ func Nsec(nsecformat string, unit Units, minWidth int, conf byte) DecoratorFunc 
 func smallDurationString(d time.Duration) string {
 
 	switch {
-	case d > 13*7*24*time.Hour:
-		return ">13w"
-	case d > 7*24*time.Hour:
+	case d >= 13*7*24*time.Hour:
+		return "≥13w"
+	case d >= 7*24*time.Hour:
 		hours := int(d.Round(time.Hour).Hours())
 		days := hours / 24
 		weeks := days / 7
@@ -172,7 +172,7 @@ func smallDurationString(d time.Duration) string {
 		} else {
 			return fmt.Sprintf("%dw", weeks)
 		}
-	case d > 24*time.Hour:
+	case d >= 24*time.Hour:
 		hours := int(d.Round(time.Hour).Hours())
 		days := hours / 24
 		hours %= 24
@@ -181,11 +181,25 @@ func smallDurationString(d time.Duration) string {
 		} else {
 			return fmt.Sprintf("%dd", days)
 		}
-	case d > 8*time.Hour:
-		return d.Round(time.Hour).String()
-	case d > 8*time.Minute:
-		return d.Round(time.Minute).String()
-	case d > 8*time.Second:
+	case d >= 60*time.Minute:
+		mins := int(d.Round(time.Minute).Minutes())
+		hours := mins / 60
+        mins %= 60
+		if mins > 0 {
+			return fmt.Sprintf("%dh%dm", hours, mins)
+		} else {
+			return fmt.Sprintf("%dh", hours)
+		}
+	case d >= 60*time.Second:
+		secs := int(d.Round(time.Second).Seconds())
+		mins := secs / 60
+        secs %= 60
+		if secs > 0 {
+			return fmt.Sprintf("%dm%ds", mins, secs)
+		} else {
+			return fmt.Sprintf("%dm", mins)
+		}
+	case d >= 8*time.Second:
 		return d.Round(time.Second).String()
 	default:
 		return d.Round(100 * time.Millisecond).String()
