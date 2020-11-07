@@ -37,21 +37,16 @@ type Statistics struct {
 	StartTime           time.Time
 	TimeElapsed         time.Duration
 	TimePerItemEstimate time.Duration
+	RollStartTime       time.Time
+	RollCurrent         int64
 }
 
-const obviousEta bool = true
-
-// Eta returns exponential-weighted-moving-average ETA estimator
+// Eta moving-average ETA estimator
 func (s *Statistics) Eta() time.Duration {
-	var eta time.Duration
-	if obviousEta {
-		// Go with the long/slow/stupid ETA
-		nsec := float64(s.Current) / s.TimeElapsed.Seconds()
-		eta = time.Duration(float64(s.Total-s.Current)/nsec) * time.Second
-	} else {
-		dur := time.Duration(s.Total - s.Current)
-		eta = dur * s.TimePerItemEstimate
-	}
+	timeElapsed := time.Since(s.RollStartTime)
+
+	nsec := float64(s.RollCurrent) / timeElapsed.Seconds()
+	eta := time.Duration(float64(s.Total-s.Current)/nsec) * time.Second
 	return eta
 }
 
@@ -135,15 +130,8 @@ func Counters(pairFormat string, unit Units, minWidth int, conf byte) DecoratorF
 func NsecString(s *Statistics, nsecformat string, unit Units) string {
 	var nsec float64
 	if s.Current > 0 {
-		if obviousEta {
-			nsec = float64(s.Current) / s.TimeElapsed.Seconds()
-		} else {
-			nsec = time.Duration(time.Second).Seconds()
-			nsec /= s.TimePerItemEstimate.Seconds()
-			if s.Current == s.Total {
-				nsec = float64(s.Current) / s.TimeElapsed.Seconds()
-			}
-		}
+		timeElapsed := time.Since(s.RollStartTime)
+		nsec = float64(s.RollCurrent) / timeElapsed.Seconds()
 	}
 	current := FormatF(nsec).To(unit)
 	str := fmt.Sprintf(nsecformat, current)
@@ -169,6 +157,41 @@ func Nsec(nsecformat string, unit Units, minWidth int, conf byte) DecoratorFunc 
 	}
 }
 
+func smallDurationString(d time.Duration) string {
+
+	switch {
+	case d > 13*7*24*time.Hour:
+		return ">13w"
+	case d > 7*24*time.Hour:
+		hours := int(d.Round(time.Hour).Hours())
+		days := hours / 24
+		weeks := days / 7
+		days %= 7
+		if days > 0 {
+			return fmt.Sprintf("%dw%dd", weeks, days)
+		} else {
+			return fmt.Sprintf("%dw", weeks)
+		}
+	case d > 24*time.Hour:
+		hours := int(d.Round(time.Hour).Hours())
+		days := hours / 24
+		hours %= 24
+		if hours > 0 {
+			return fmt.Sprintf("%dd%dh", days, hours)
+		} else {
+			return fmt.Sprintf("%dd", days)
+		}
+	case d > 8*time.Hour:
+		return d.Round(time.Hour).String()
+	case d > 8*time.Minute:
+		return d.Round(time.Minute).String()
+	case d > 8*time.Second:
+		return d.Round(time.Second).String()
+	default:
+		return d.Round(100 * time.Millisecond).String()
+	}
+}
+
 // ETA provides exponential-weighted-moving-average ETA decorator, shows the
 // elapsed time after the progress has finished.
 // If there're more than one bar, and you'd like to synchronize column width,
@@ -176,22 +199,24 @@ func Nsec(nsecformat string, unit Units, minWidth int, conf byte) DecoratorFunc 
 func ETAString(s *Statistics) string {
 	var dur time.Duration
 	if s.Current == s.Total {
-		dur = s.TimeElapsed
+		return smallDurationString(s.TimeElapsed)
 	} else {
 		dur = s.Eta()
 	}
 	var str string
 	secs := int(dur.Seconds()) % 60
-	if s.Current == 0 {
-		str = "∞:??"
-	} else if dur.Hours() > 99*24 {
+	if s.RollCurrent == 0 {
+		return "∞:??"
+	} else if dur.Hours() > 999*24 {
 		str = "∞"
-	} else if dur.Hours() > 99 {
-        d := dur.Round(time.Hour * 24).Hours() / 24
+	} else if dur.Hours() > 36 { // In theory this could be higher, but human UI
+		d := dur.Round(time.Hour*24).Hours() / 24
 		str = fmt.Sprintf("~%dd", int(d))
-	} else if dur.Minutes() > 99 {
-        h := dur.Round(time.Hour).Hours()
+	} else if dur.Minutes() > 59 {
+		h := dur.Round(time.Hour).Hours()
 		str = fmt.Sprintf("~%dh", int(h))
+	} else if dur.Seconds() < 3 {
+		str = "~2s"
 	} else {
 		str = fmt.Sprintf("%d:%02d", int(dur.Minutes()), secs)
 	}

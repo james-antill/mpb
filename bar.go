@@ -40,6 +40,9 @@ type Bar struct {
 	cacheState state
 }
 
+const rollAveSlots = 8
+const rollAveTime = 2 * time.Second
+
 type (
 	refill struct {
 		char rune
@@ -58,14 +61,18 @@ type (
 		started        bool
 		completed      bool
 		aborted        bool
-		startTime      time.Time
-		timeElapsed    time.Duration
-		blockStartTime time.Time
-		timePerItem    time.Duration
-		appendFuncs    []decor.DecoratorFunc
-		prependFuncs   []decor.DecoratorFunc
-		simpleSpinner  func() byte
-		refill         *refill
+
+		// Statistics ...
+		startTime time.Time
+		// For rolling average ETA
+		rollTime  [rollAveSlots]time.Time
+		rollTotal [rollAveSlots]int64
+		rollOff   int
+
+		appendFuncs   []decor.DecoratorFunc
+		prependFuncs  []decor.DecoratorFunc
+		simpleSpinner func() byte
+		refill        *refill
 	}
 )
 
@@ -140,23 +147,17 @@ func (b *Bar) Incr(n int) {
 	case b.ops <- func(s *state) {
 		if s.current == 0 && !s.started {
 			s.startTime = time.Now()
-			s.blockStartTime = s.startTime
+			s.initETA()
 			s.started = true
 		}
 		sum := s.current + int64(n)
-		s.timeElapsed = time.Since(s.startTime)
-		if n > 0 {
-			s.updateTimePerItemEstimate(n)
-		}
+		s.updateETA(int64(n))
 		if s.total > 0 && sum >= s.total {
 			s.current = s.total
 			s.completed = true
 			return
 		}
 		s.current = sum
-		if n > 0 {
-			s.blockStartTime = time.Now()
-		}
 	}:
 	case <-b.quit:
 		return
@@ -337,10 +338,42 @@ func (s *state) updateFormat(format string, fillFmt []string) {
 	s.format[rFill] = s.fmtFill[len(s.fmtFill)-1]
 }
 
-func (s *state) updateTimePerItemEstimate(amount int) {
-	lastBlockTime := time.Since(s.blockStartTime) // shorthand for time.Now().Sub(t)
-	lastItemEstimate := float64(lastBlockTime) / float64(amount)
-	s.timePerItem = time.Duration((s.etaAlpha * lastItemEstimate) + (1-s.etaAlpha)*float64(s.timePerItem))
+func (s *state) initETA() {
+	s.rollTime[0] = s.startTime
+}
+
+func (s *state) updateETA(amount int64) {
+	if amount == 0 {
+		return
+	}
+
+	dur := time.Since(s.rollTime[s.rollOff])
+	if dur > rollAveTime {
+		s.rollOff = (s.rollOff + 1) % rollAveSlots
+		s.rollTime[s.rollOff] = time.Now()
+		s.rollTotal[s.rollOff] = 0
+	}
+
+	s.rollTotal[s.rollOff] += amount
+}
+
+func (s *state) getDataETA() (time.Time, int64) {
+	off := s.rollOff
+	off = (off + 1) % rollAveSlots
+	beg := s.rollTime[off] // Oldest time is the next to be used.
+	cur := s.rollTotal[off]
+
+	if cur == 0 { // Only happens when we haven't rolled over yet
+		// Go with the main data...
+		return s.startTime, s.current
+	}
+
+	for i := 1; i < rollAveSlots; i++ {
+		off = (off + 1) % rollAveSlots
+		cur += s.rollTotal[off]
+	}
+
+	return beg, cur
 }
 
 func draw(s *state, termWidth int, prependWs, appendWs *widthSync) []byte {
@@ -476,15 +509,19 @@ func fillBar(total, current int64, width int,
 }
 
 func newStatistics(s *state) *decor.Statistics {
+	beg, cur := s.getDataETA()
+
 	return &decor.Statistics{
-		ID:                  s.id,
-		Completed:           s.completed,
-		Aborted:             s.aborted,
-		Total:               s.total,
-		Current:             s.current,
-		StartTime:           s.startTime,
-		TimeElapsed:         s.timeElapsed,
-		TimePerItemEstimate: s.timePerItem,
+		ID:          s.id,
+		Completed:   s.completed,
+		Aborted:     s.aborted,
+		Total:       s.total,
+		Current:     s.current,
+		StartTime:   s.startTime,
+		TimeElapsed: time.Since(s.startTime),
+
+		RollCurrent:   cur,
+		RollStartTime: beg,
 	}
 }
 
